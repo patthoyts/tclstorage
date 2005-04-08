@@ -1,0 +1,121 @@
+[manpage_begin tclstorage n 1.0.0]
+[copyright {2004, Pat Thoyts}]
+[comment {link rel="stylesheet" href="manpage.css" type="text/css"}]
+[moddesc {tclstorage}]
+[titledesc {Structured storage access tcl extension}]
+[require Tcl 8.2]
+[require Storage [opt 1.0.0]]
+[description]
+[para]
+
+This package is an extension that adds the ability to access and
+manipulate Microsoft's "Structured Storage" files to Tcl.  Structured
+storages are used extensively in Windows to provide persistence for
+OLE or COM components and as a composite file for various
+applications. The format presents a filesystem-like hierarchy of
+storages and streams that maps well into Tcl's virtual filesystem
+model.
+
+[para]
+
+Notable users of structured storages are Microsoft Word and Excel.
+
+[section COMMANDS]
+
+[list_begin definitions]
+
+[call [cmd "storage open"] [arg filename] [opt [arg "mode"]]]
+
+Creates or opens a structured storage file. This will create 
+a unique command in the Tcl interpreter that can be used to 
+access the contents of the storage. The file will remain
+open with exclusive access until this command is destroyed either
+by the use of the close sub-command or by renaming the command
+to {}.
+[nl]
+The mode string is as per the Tcl open command. If w is specified
+the file will be created.
+
+[list_end]
+
+[section "ENSEMBLE COMMANDS"]
+
+[list_begin definitions]
+
+[call "\$stg [cmd opendir] [arg name] [opt [arg mode]]"]
+
+Opens a sub-storage. A new Tcl command is created to manage the
+resource and the mode is as per the Tcl open command. If 'w'
+is specified then the sub-storage is created as a child of the
+current storage if it is not already present.
+Note: Storages may be read-only or write-only or read-write.
+[nl]
+The sub-storage is only usable if all it's parents are still
+open. This limitation is part of the COM architecture. 
+If a parent storage is closed then the only valid command
+on its children is a close.
+
+[call "\$stg [cmd open] [arg name] [opt [arg mode]]"]
+
+Open a file within the storage. This opens the named item
+and creates a Tcl channel to support reading and writing
+data. Modes are as per the Tcl 'open' command and may depend upon
+the mode settings of the owning storage.
+
+[call "\$stg [cmd close]"]
+
+Closes the storage or sub-storage and deletes the command from the
+interpreter. See the [cmd opendir] command for some caveats about
+this.
+
+[call "\$stg [cmd stat] [arg name] [arg varname]"]
+
+Fetches information about an item in the structured storage. This is
+equivalent to the [cmd "file stat"] command and similar fields are set
+in [arg varname].
+
+[call "\$stg [cmd commit]"]
+
+Flush changes to the underlying file.
+
+At the moment we always use STGM_DIRECT. In the future we may
+support transacted mode in which case this would do something.
+However, for multi-megabyte files there is a significant
+performance hit when using transacted mode - especially during
+the commit.
+
+[call "\$stg [cmd rename] [arg oldname] [arg newname]"]
+
+Change the name of an item
+
+[call "\$stg [cmd remove] [arg name]"]
+
+Removes the item from the storage. If the named item is a 
+sub-storage then it is removed [strong "even if not empty"].
+
+[call "\$stg [cmd names]"]
+
+Obtain a list of all item names contained in this storage. The list
+includes both sub-storage names and stream names and is not sorted.
+
+[list_end]
+
+[example {
+% package require Storage
+1.0.0
+% set stg [storage open test.stg w+]
+stg1
+% set stm [$stg open file.txt w]
+stm1
+% puts $stm "Hello, World!"
+% close $stm
+% $stg names
+file.txt
+% $stg close
+}]
+
+[section AUTHORS]
+Pat Thoyts
+
+[keywords {structured storage} stream vfs {virtual filesystem}]
+[manpage_end]

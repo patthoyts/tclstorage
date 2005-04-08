@@ -1,0 +1,41 @@
+[manpage_begin stgvfs n 1.0.0]
+[copyright {2004, Pat Thoyts}]
+[comment {link rel="stylesheet" href="manpage.css" type="text/css"}]
+[moddesc {stgvfs}]
+[titledesc {Structured storage based virtual filesystem}]
+[require Tcl 8.2]
+[require Storage [opt 1.0.0]]
+[require vfs::stg [opt 1.0.0]]
+[description]
+[para]
+
+This package builds upon the [package Storage] package to enable Tcl
+scripts to mount structured storage files as a virtual
+filesystem. Files based upon this format include Microsoft Word
+documents, Excel spreadsheets and Powerpoint presentations and are
+often used for OLE object persistence to file.
+
+[section COMMANDS]
+
+[list_begin definitions]
+
+[call [cmd "vfs::stg::Mount"] [arg "path"] [arg "to"]]
+
+Mount the specified file as directory [arg to].
+
+[list_end]
+
+[example {
+% package require stgvfs
+% vfs::stg::Mount "My Document.doc" "My Document.doc"
+% set f [open "My Document.doc/WordDocument" r]
+% fconfigure $f -encoding unicode
+% read $f
+}]
+
+[section AUTHORS]
+Pat Thoyts
+
+[see_also vfs(n) tclstorage(n)]
+[keywords {structured storage} stream vfs {virtual filesystem}]
+[manpage_end]

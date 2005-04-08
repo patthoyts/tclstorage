@@ -1,0 +1,31 @@
+The Storage package is Tcl extension that adds a 'storage' command to
+Tcl and provides access to Microsoft's "Structured Storage" file
+format.  Structured storages are used extensively to provide
+persistence for OLE or COM components. The format presents a
+filesystem-like hierarchy of storages and streams that maps well into
+Tcl's virtual filesystem model.
+
+Notable users of structured storages are Microsoft Word and Excel.
+
+See http://www.patthoyts.tk/index.html#tclstorage for files and
+documentation.
+
+Usage:
+  storage open filename mode
+     mode is as per the Tcl open command "[raw]+?"
+     returns a storage command. The storage will remain open
+     as long as the command exists. You can close the storage file
+     using either the close subcommand or renaming the command.
+  eg: % storage open document.doc r+
+      stg1
+
+ object commands:
+  opendir name ?mode?     open or create a sub-storage
+  open name ?mode?        open or create a stream as a Tcl channel
+  close                   close the storage or sub-storage
+  stat name varname       get information about the named item
+  commit                  not used
+  rename oldname newname  rename a stream or sub-storage
+  remove name             deletes a stream or sub-storage + contents
+  names                   list all items in the current storage
+

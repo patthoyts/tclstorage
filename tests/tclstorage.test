@@ -1,0 +1,547 @@
+# tclstorage.test:  tests for the tclstorage package            -*- tcl -*-
+#
+# $Id$
+
+# -------------------------------------------------------------------------
+# Initialize the test package
+#
+if {[lsearch [namespace children] ::tcltest] == -1} {
+    package require tcltest
+    namespace import ::tcltest::*
+}
+
+package require Storage
+
+# -------------------------------------------------------------------------
+# Setup any constraints
+#
+
+# -------------------------------------------------------------------------
+# Now the package specific tests....
+# -------------------------------------------------------------------------
+
+puts "- Storage [package present Storage]"
+
+# -------------------------------------------------------------------------
+
+test storage-1.0 {create storage} \
+    -body {
+        list [catch {
+            set stg [storage open xyzzy.stg w]
+            set result [list [string match "stg*" $stg] \
+                            [file exists xyzzy.stg]]
+            $stg close
+            set result
+        } msg] $msg
+    } \
+    -cleanup {
+        file delete -force xyzzy.stg
+    } \
+    -result {0 {1 1}}
+
+test storage-1.1 {open storage} \
+    -setup {
+        set stg [storage open xyzzy.stg w]
+        $stg close
+    } \
+    -body {
+        list [catch {
+            set stg [storage open xyzzy.stg r]
+            set result [list [string match "stg*" $stg] \
+                            [file exists xyzzy.stg]]
+            $stg close
+            set result
+        } msg] $msg
+    } \
+    -cleanup {
+        file delete -force xyzzy.stg
+    } \
+    -result {0 {1 1}}
+
+test storage-1.2 {create stream} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+    } \
+    -body {
+        list [catch {
+            set stm [$stg open test w+]
+            set result [fconfigure $stm]
+            close $stm
+            string match stm* $stm
+        } msg] $msg
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result {0 1}
+
+test storage-1.3 {create stream and write data} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+    } \
+    -body {
+        list [catch {
+            set stm [$stg open test w+]
+            puts $stm "Hello, world"
+            close $stm
+            string match "stm*" $stm
+        } msg] $msg
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result {0 1}
+
+test storage-1.4 {create stream and write and read} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+        set stm [$stg open test w+]
+        puts -nonewline $stm "Hello, world"
+        close $stm
+    } \
+    -body {
+        list [catch {
+            set stm [$stg open test r]
+            set data [read $stm]
+            close $stm
+            set data
+        } msg] $msg
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result {0 {Hello, world}}
+
+test storage-1.5 {open non-existent stream} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+    } \
+    -body {
+        list [catch {
+            set stm [$stg open test r]
+            close $stm
+            string match "stm*" $stm
+        } msg] $msg
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result {1 {error opening "test": file not found}}
+
+test storage-1.6 {write on read-only stream} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+        set stm [$stg open test w]
+        puts -nonewline $stm "testdata"
+        close $stm
+    } \
+    -body {
+        list [catch {
+            set stm [$stg open test r]
+            puts -nonewline $stm "moredata"
+            close $stm
+            string match "stm*" $stm
+        } msg] [regsub {stm\d+} $msg {STM}]
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result [list 1 "channel \"STM\" wasn't opened for writing"]
+
+test storage-1.7 {read from write-only stream} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+    } \
+    -body {
+        list [catch {
+            set stm [$stg open test w]
+            set d [read $stm]
+            close $stm
+            string match "stm*" $stm
+        } msg] [regsub {stm\d+} $msg {STM}]
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result [list 1 "channel \"STM\" wasn't opened for reading"]
+
+test storage-1.8 {append to stream} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+        set stm [$stg open test w]
+        puts -nonewline $stm ABCDE
+        close $stm
+    } \
+    -body {
+        list [catch {
+            set stm [$stg open test a]
+            puts -nonewline $stm FGH
+            close $stm
+            set stm [$stg open test r]
+            set data [read $stm]
+            close $stm
+            set data
+        } msg] $msg
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result [list 0 ABCDEFGH]
+
+test storage-1.9 {append to readable stream} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+        set stm [$stg open test w]
+        puts -nonewline $stm ABCDE
+        close $stm
+    } \
+    -body {
+        list [catch {
+            set stm [$stg open test a+]
+            puts -nonewline $stm FGH
+            set data [read $stm]
+            close $stm
+            set data
+        } msg] $msg
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result [list 0 {}]
+
+test storage-2.0 {seek to start} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+        set stm [$stg open test w]
+        puts -nonewline $stm ABCDEFGH
+        close $stm
+    } \
+    -body {
+        list [catch {
+            set stm [$stg open test a+]
+            seek $stm 0
+            set data [read $stm]
+            close $stm
+            set data
+        } msg] $msg
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result [list 0 ABCDEFGH]
+
+test storage-2.1 {seek to start + 5} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+        set stm [$stg open test w]
+        puts -nonewline $stm ABCDEFGH
+        close $stm
+    } \
+    -body {
+        list [catch {
+            set stm [$stg open test a+]
+            seek $stm 5 start
+            set data [read $stm]
+            close $stm
+            set data
+        } msg] $msg
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result [list 0 FGH]
+
+test storage-2.1 {seek to end - 1} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+        set stm [$stg open test w]
+        puts -nonewline $stm ABCDEFGH
+        close $stm
+    } \
+    -body {
+        list [catch {
+            set stm [$stg open test r]
+            seek $stm -2 end
+            set data [read $stm]
+            close $stm
+            set data
+        } msg] $msg
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result [list 0 GH]
+
+test storage-2.2 {seek to current + 2} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+        set stm [$stg open test w]
+        puts -nonewline $stm ABCDEFGH
+        close $stm
+    } \
+    -body {
+        list [catch {
+            set stm [$stg open test r]
+            read $stm 2
+            seek $stm 2 cur
+            set data [read $stm]
+            close $stm
+            set data
+        } msg] $msg
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result [list 0 EFGH]
+
+test storage-2.3 {seek to current - 2} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+        set stm [$stg open test w]
+        puts -nonewline $stm ABCDEFGH
+        close $stm
+    } \
+    -body {
+        list [catch {
+            set stm [$stg open test r]
+            read $stm 5
+            seek $stm -2 cur
+            set data [read $stm]
+            close $stm
+            set data
+        } msg] $msg
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result [list 0 DEFGH]
+
+test storage-3.0 {list storage contents} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+        foreach name {one two three} {
+            set stm [$stg open $name w]
+            puts -nonewline $stm ABCDEFGH
+            close $stm
+        }
+    } \
+    -body {
+        list [catch {
+            $stg names
+        } msg] $msg
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result [list 0 [list one two three]]
+
+test storage-3.1 {create substorage} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+    } \
+    -body {
+        list [catch {
+            set sub [$stg opendir subdir w]
+            $sub close
+            $stg names
+        } msg] $msg
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result [list 0 [list subdir]]
+
+test storage-3.2 {create sub-sub-storage} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+        set sub [$stg opendir subdir w+]
+    } \
+    -body {
+        list [catch {
+            set subsub [$sub opendir subsubdir w]
+            $subsub close
+            $sub names
+        } msg] $msg
+    } \
+    -cleanup {
+        $sub close
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result [list 0 [list subsubdir]]
+
+test storage-3.3 {create substorage files} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+        set sub [$stg opendir subdir w+]
+    } \
+    -body {
+        list [catch {
+            set stm [$sub open test w+]
+            puts -nonewline $stm ABCDEFG
+            flush $stm
+            seek $stm 0
+            set d [read $stm]
+            close $stm
+            list [$sub names] $d
+        } msg] $msg
+    } \
+    -cleanup {
+        $sub close
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result [list 0 [list test ABCDEFG]]
+
+test storage-3.4 {delete file} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+        set stm [$stg open test w]
+        puts -nonewline $stm ABCDEF
+        close $stm
+    } \
+    -body {
+        list [catch {
+            set result [$stg names]
+            $stg remove test
+            lappend result [$stg names]
+            set result
+        } msg] $msg
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result [list 0 [list test {}]]
+
+test storage-3.5 {rename file} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+        set stm [$stg open test w]
+        puts -nonewline $stm ABCDEF
+        close $stm
+    } \
+    -body {
+        list [catch {
+            set result [$stg names]
+            $stg rename test renamed
+            lappend result [$stg names]
+            set result
+        } msg] $msg
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result [list 0 [list test renamed]]
+
+test storage-3.6 {stat file} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+        set stm [$stg open test w]
+        puts -nonewline $stm ABCDEF
+        close $stm
+    } \
+    -body {
+        list [catch {
+            $stg stat test a
+            list $a(type) $a(size)
+        } msg] $msg
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result [list 0 [list file 6]]
+
+test storage-3.7 {stat file: timestamps} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+        set stm [$stg open test w]
+        puts -nonewline $stm ABCDEF
+        close $stm
+    } \
+    -body {
+        list [catch {
+            file stat xyzzy.stg s
+            $stg stat test a
+            if {$s(ctime) == $a(ctime)} {
+                list 1
+            } else {
+                list $s(ctime) != $a(ctime)
+            }
+        } msg] $msg
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result [list 0 [list 1]]
+
+test storage-3.8 {open sub-storage for reading} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+        set sub [$stg opendir subdir w+]
+        set stm [$sub open test w]
+        close $stm
+        $sub close
+    } \
+    -body {
+        list [catch {
+            set sub [$stg opendir subdir r] 
+            set result [$sub names]
+            $sub close
+            set result
+        } msg] $msg
+    } \
+    -cleanup {
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result [list 0 [list test]]
+
+test storage-3.9 {open sub-storage for reading - fail write} \
+    -setup {
+        set stg [storage open xyzzy.stg w+]
+        set sub [$stg opendir subdir w]
+        $sub close
+        set sub [$stg opendir subdir r]
+    } \
+    -body {
+        list [catch {
+            set stm [$sub open test w]
+            close $stm
+            $sub names
+        } msg] $msg
+    } \
+    -cleanup {
+        $sub close
+        $stg close
+        file delete -force xyzzy.stg
+    } \
+    -result {1 {error opening "test": permission denied}}
+
+# -------------------------------------------------------------------------
+
+::tcltest::cleanupTests
+
+# -------------------------------------------------------------------------
+# Local Variables:
+#   mode: tcl
+#   indent-tabs-mode: nil
+# End:
