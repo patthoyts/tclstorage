@@ -27,6 +27,7 @@
  *   rename oldname newname  rename a stream or sub-storage
  *   remove name             deletes a stream or sub-storage + contents
  *   names                   list all items in the current storage
+ *   propertyset             subcommands to handle property sets
  *
  * ----------------------------------------------------------------------
  *
@@ -43,46 +44,16 @@
 #define PACKAGE_NAME       "Storage"
 #endif
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION    "1.0.0"
+#define PACKAGE_VERSION    "1.1.0"
 #endif
 
-#define WIN32_LEAN_AND_MEAN
-#define STRICT
-#include <ole2.h>
-#include <tcl.h>
-#include <errno.h>
-#include <time.h>
-
-#undef TCL_STORAGE_CLASS
-#define TCL_STORAGE_CLASS DLLEXPORT
+#include "tclstorage.h"
 
 #if _MSC_VER >= 1000
 #pragma comment(lib, "ole32")
 #pragma comment(lib, "advapi32")
 #endif
 
-typedef struct Ensemble {
-    const char *name;           /* subcommand name */
-    Tcl_ObjCmdProc *command;    /* implementation OR */
-    struct Ensemble *ensemble;  /* subcommand ensemble */
-} Ensemble;
-
-typedef struct EnsembleCmdData {
-    struct Ensemble *ensemble;
-    ClientData       clientData;
-} EnsembleCmdData;
-
-typedef struct {
-    IStorage *pstg;
-    int       mode;
-    Tcl_Obj  *children;
-} Storage;
-
-EXTERN int Storage_Init(Tcl_Interp *interp);
-EXTERN int Storage_SafeInit(Tcl_Interp *interp);
-EXTERN Tcl_ObjCmdProc Storage_OpenStorage;
-
-static Tcl_ObjCmdProc TclEnsembleCmd;
 static Tcl_ObjCmdProc StorageCmd;
 static Tcl_CmdDeleteProc StorageCmdDeleteProc;
 static Tcl_ObjCmdProc StorageObjCmd;
@@ -96,8 +67,10 @@ static Tcl_ObjCmdProc StorageCloseCmd;
 static Tcl_ObjCmdProc StorageCommitCmd;
 static Tcl_ObjCmdProc StorageNamesCmd;
 
+extern Tcl_ObjCmdProc PropertySetOpenCmd;
+extern Tcl_ObjCmdProc PropertySetDeleteCmd;
+extern Tcl_ObjCmdProc PropertySetNamesCmd;
 
-static Tcl_Obj *Win32Error(const char * szPrefix, HRESULT hr);
 static long UNIQUEID = 0;
 
 static int GetItemInfo(Tcl_Interp *interp, IStorage *pstg, 
@@ -146,25 +119,27 @@ static Ensemble StorageEnsemble[] = {
     { NULL,     0,                     0 }
 };
 
+static Ensemble PropertySetEnsemble[] = {
+    { "open",     PropertySetOpenCmd,    0 },
+    { "delete",   PropertySetDeleteCmd,  0 },
+    { "names",    PropertySetNamesCmd,   0 },
+    { NULL,       0,                     0 },
+};
+
 static Ensemble StorageObjEnsemble[] = {
-    { "opendir",  StorageOpendirCmd,0 },
-    { "open",     StorageOpenCmd,   0 },
-    { "close",    StorageCloseCmd,  0 },
-    { "stat",     StorageStatCmd,   0 },
-    { "commit",   StorageCommitCmd, 0 },
-    { "rename",   StorageRenameCmd, 0 },
-    { "remove",   StorageRemoveCmd, 0 },
-    { "names",    StorageNamesCmd,  0 },
-    { NULL,       0,                0 }
+    { "opendir",     StorageOpendirCmd,     0 },
+    { "open",        StorageOpenCmd,        0 },
+    { "close",       StorageCloseCmd,       0 },
+    { "stat",        StorageStatCmd,        0 },
+    { "commit",      StorageCommitCmd,      0 },
+    { "rename",      StorageRenameCmd,      0 },
+    { "remove",      StorageRemoveCmd,      0 },
+    { "names",       StorageNamesCmd,       0 },
+    { "propertyset", NULL, PropertySetEnsemble},
+    { NULL,          0,                     0 }
 };
 
 /* ---------------------------------------------------------------------- */
-
-#define STGM_APPEND     0x00000004  /* unused bit in Win32 enum */
-#define STGM_TRUNC      0x00004000  /*   "            "         */
-#define STGM_WIN32MASK  0xFFFFBFFB  /* mask to remove private bits */
-#define STGM_STREAMMASK 0xFFFFAFF8  /* mask off the access, create and
-                                       append bits */
 
 typedef struct {
     const char *s;
@@ -200,7 +175,7 @@ const stgm_map_t stgm_map[] = {
  */
 
 int 
-static GetStorageFlagsFromObj(Tcl_Interp *interp, 
+GetStorageFlagsFromObj(Tcl_Interp *interp, 
     Tcl_Obj *objPtr, int *flagsPtr)
 {
     int index = 0, objc, n, r = TCL_OK;
@@ -1162,7 +1137,7 @@ StorageChannelGetHandle(ClientData instanceData,
  * ----------------------------------------------------------------------
  */
 
-static int
+int
 TclEnsembleCmd(ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *const objv[])
 {
@@ -1265,7 +1240,7 @@ GetItemInfo(Tcl_Interp *interp, IStorage *pstg,
  * ----------------------------------------------------------------------
  */
 
-static Tcl_Obj *
+Tcl_Obj *
 Win32Error(const char * szPrefix, HRESULT hr)
 {
     Tcl_Obj *msgObj = NULL;

@@ -156,12 +156,13 @@ Please `cd` to its location first.
 PROJECT = tclstorage
 !include "rules.vc"
 
-DOTVERSION      = 1.0.0
+DOTVERSION      = 1.1.0
 VERSION         = $(DOTVERSION:.=)
 STUBPREFIX      = $(PROJECT)stub
 
 DLLOBJS = \
-	$(TMP_DIR)\tclstorage.obj
+	$(TMP_DIR)\tclstorage.obj \
+	$(TMP_DIR)\propertyset.obj
 RCRES = \
 	$(TMP_DIR)\tclstorage.res
 

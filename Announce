@@ -28,4 +28,21 @@ Usage:
   rename oldname newname  rename a stream or sub-storage
   remove name             deletes a stream or sub-storage + contents
   names                   list all items in the current storage
+  propertyset open name ?mode?  open a property set
+  propertyset delete name       delete a property set
+  propertyset names             list all property sets
 
+ propertyset commands:
+  names                   list the property names and types
+  get propid              get the value for a property
+  set propid value ?type? set the value for a property
+  delete propid           remove a property from the propertyset.
+  close                   close the propertyset and commit changes.
+
+
+
+ChangeLog:
+  1.1.0: Added support for SummaryInformation and DocumentSummaryInformation
+         property sets. Read and write properties and list them.
+
+  1.0.0: Initial public release.
