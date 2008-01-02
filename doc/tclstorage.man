@@ -4,7 +4,7 @@
 [moddesc {tclstorage}]
 [titledesc {Structured storage access tcl extension}]
 [require Tcl 8.2]
-[require Storage [opt 1.0.0]]
+[require Storage [opt 1.1.0]]
 [description]
 [para]
 
@@ -35,6 +35,10 @@ to {}.
 [nl]
 The mode string is as per the Tcl open command. If w is specified
 the file will be created.
+[nl]
+If [arg filename] is an empty string then a storage may be created
+in-memory without a file. Once such a storage is released the memory
+will be released to the system.
 
 [list_end]
 

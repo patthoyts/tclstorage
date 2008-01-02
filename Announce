@@ -42,6 +42,8 @@ Usage:
 
 
 ChangeLog:
+  1.1.0+ Support creation of memory storages by providing an empty filename.
+
   1.1.0: Added support for SummaryInformation and DocumentSummaryInformation
          property sets. Read and write properties and list them.
 
