@@ -374,12 +374,25 @@ Storage_OpenStorage(ClientData clientData, Tcl_Interp *interp,
     }
     
     if (r == TCL_OK) {
-        if (mode & STGM_CREATE)
-            hr = StgCreateDocfile(Tcl_GetUnicode(objv[2]), 
-		mode & STGM_WIN32MASK, 0, &pstg);
-        else
+        if (mode & STGM_CREATE) {
+	    int cchFile = 0;
+	    LPCWSTR wszFile = Tcl_GetUnicodeFromObj(objv[2], &cchFile);
+	    if (cchFile < 1) {
+		ILockBytes *pLockBytes = NULL;
+		hr = CreateILockBytesOnHGlobal(NULL, TRUE, &pLockBytes);
+		if (SUCCEEDED(hr)) {
+		    hr = StgCreateDocfileOnILockBytes(pLockBytes,
+			mode & STGM_WIN32MASK, 0, &pstg);
+		    pLockBytes->lpVtbl->Release(pLockBytes);
+		}
+	    } else {
+		hr = StgCreateDocfile(Tcl_GetUnicode(objv[2]), 
+		    mode & STGM_WIN32MASK, 0, &pstg);
+	    }
+	} else {
             hr = StgOpenStorage(Tcl_GetUnicode(objv[2]), NULL, 
 		mode & STGM_WIN32MASK, NULL, 0, &pstg);
+	}
 	
         if (SUCCEEDED(hr)) {
             r = CreateStorageCommand(interp, NULL, pstg, mode);
