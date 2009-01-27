@@ -4,7 +4,7 @@
 [moddesc {tclstorage}]
 [titledesc {Structured storage access tcl extension}]
 [require Tcl 8.2]
-[require Storage [opt 1.1.0]]
+[require Storage [opt 1.2.0]]
 [description]
 [para]
 
@@ -101,6 +101,50 @@ sub-storage then it is removed [strong "even if not empty"].
 
 Obtain a list of all item names contained in this storage. The list
 includes both sub-storage names and stream names and is not sorted.
+
+[call "\$stg [cmd {propertyset open}] [arg name] [opt [arg mode]]"]
+
+Open a named property set. This returns a new Tcl command that permits
+examination and manipulation of the propertyset items. 
+See [sectref {PROPERTYSET COMMANDS}].
+[nl]
+[arg mode] is as per the Tcl [cmd open] command modes.
+
+[call "\$stg [cmd {propertyset delete}] [arg name]"]
+
+Delete the given propertyset.
+
+[call "\$stg [cmd {propertyset names}]"]
+
+List all the available property sets in this storage.
+
+[list_end]
+
+[section "PROPERTYSET COMMANDS"]
+
+[list_begin definitions]
+
+[call "\$propset [cmd names]"]
+
+Returns a list of all property names and types.
+
+[call "\$propset [cmd get] [arg propid]"]
+
+Returns the value of the given property.
+
+[call "\$propset [cmd set] [arg propid] [arg value] [opt [arg type]]"]
+
+Modify the value and optionally the type of the given property.
+
+[call "\$propset [cmd delete] [arg propid]"]
+
+Remove a property from the propertyset.
+
+[call "\$propset [cmd close]"]
+
+Closes the property set. The Tcl command is deleted and the COM
+instance released. This must be done before the parent storage is
+closed or any changes could be lost.
 
 [list_end]
 

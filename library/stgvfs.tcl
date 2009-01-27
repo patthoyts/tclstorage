@@ -1,6 +1,11 @@
 # stgvfs.tcl - Copyright (C) 2004 Pat Thoyts <patthoyts@users.sourceforge.net>
 #
-# 
+# 	This maps an OLE Structured Storage into a Tcl virtual filesystem
+#	You can mount a DOC file (word or excel or any other such compound
+#	document) and then treat it as a filesystem. All sub-storages are
+#	presented as directories and all streams as files and can be opened
+#	as tcl channels.
+#	This vfs does not provide access to the property sets.
 #
 
 package require vfs 1;                  # tclvfs
@@ -18,11 +23,12 @@ namespace eval ::vfs::stg {
 
 proc ::vfs::stg::Mount {path local} {
     variable uid
-    set stg [::storage open [::file normalize $path] r+]
+    set mode r+
+    if {$path eq {}} { set mode w+ }
+    set stg [::storage open [::file normalize $path] $mode]
 
     set token [namespace current]::mount[incr uid]
-    variable $token
-    upvar \#0 $token state
+    upvar #0 $token state
     catch {unset state}
     set state(/stg) $stg
     set state(/root) $path
@@ -34,9 +40,7 @@ proc ::vfs::stg::Mount {path local} {
 }
 
 proc ::vfs::stg::Unmount {token local} {
-    variable $token
-    upvar \#0 $token state
-
+    upvar #0 $token state
     foreach path [array get state] {
         if {![string match "/*" $path]} {
             catch {$state($path) close}
@@ -68,10 +72,16 @@ proc ::vfs::stg::handler {token cmd root relative actualpath args} {
 # Returns the final storage item in the path.
 # - path
 proc ::vfs::stg::PathToStg {token path} {
-    variable $token
-    upvar \#0 $token state
+    upvar #0 $token state
     set stg $state(/stg)
-    if {[string equal $path "."]} {return $stg}
+    if {[string equal $path "."]} { return $stg }
+    if {[info exists state($path)]} {
+        return $state($path)
+    }
+    if {[info exists state([file dirname $path])]} {
+        return $state([file dirname $path])
+    }
+
     set elements [file split $path]
     set path {}
     foreach dir $elements {
@@ -92,30 +102,30 @@ proc ::vfs::stg::PathToStg {token path} {
 # The vfs handler procedures
 # -------------------------------------------------------------------------
 
-proc vfs::stg::access {token name mode} {
-    ::vfs::log "access: $token $name $mode"
+proc vfs::stg::access {token path mode} {
+    ::vfs::log "access: $token $path $mode"
 
-    if {[string length $name] < 1} {return 1}
-    set stg [PathToStg $token [file dirname $name]]
-    if {[catch {$stg stat [file tail $name] sd} err]} {
-        vfs::filesystem posixerror $::vfs::posix(ENOENT)
-    } else {
-        if {($mode & 2) && $sd(mode) == 1} {
-            vfs::filesystem posixerror $::vfs::posix(EACCES)
+    if {[catch {
+        if {[string length $path] < 1} { return }
+        set stg [PathToStg $token [file dirname $path]]
+        ::vfs::log "access: check [file tail $path] within $stg"
+        if {[catch {$stg stat [file tail $path] sd} err]} {
+            ::vfs::log "access: error: $err"
+            ::vfs::filesystem posixerror $::vfs::posix(ENOENT)
+        } else {
+            if {($mode & 2) && !($sd(mode) & 2)} {
+                ::vfs::filesystem posixerror $::vfs::posix(EACCES)
+            }
         }
-    }
+    } err]} { ::vfs::log "access: error: $err" }
     return
 }
 
 proc vfs::stg::createdirectory {token path} {
-    ::vfs::log "createdirectory: $token $path"
+    ::vfs::log "createdirectory: $token \"$path\""
+    upvar #0 $token state
     set stg [PathToStg $token [file dirname $path]]
-    $stg opendir [file tail $path] w+
-}
-
-proc vfs::stg::attributes {token} {
-    ::vfs::log "attributes: $fd"
-    return [list "state"]
+    set state($path) [$stg opendir [file tail $path] w+]
 }
 
 proc vfs::stg::stat {token path} {
@@ -123,11 +133,6 @@ proc vfs::stg::stat {token path} {
     set stg [PathToStg $token [file dirname $path]]
     $stg stat [file tail $path] sb
     array get sb
-}
-
-proc vfs::stg::state {token args} {
-    ::vfs::log "state: $token $args"
-    vfs::attributeCantConfigure "state" "readonly" $args
 }
 
 proc vfs::stg::matchindirectory {token path actualpath pattern type} {
@@ -157,7 +162,7 @@ proc vfs::stg::matchindirectory {token path actualpath pattern type} {
 }
 
 proc vfs::stg::open {token path mode permissions} {
-    ::vfs::log "open: $token $path $mode $permissions"
+    ::vfs::log "open: $token \"$path\" $mode $permissions"
     set stg [PathToStg $token [file dirname $path]]
     if {[catch {set f [$stg open [file tail $path] $mode]} err]} {
         vfs::filesystem posixerror $::vfs::posix(EACCES)
@@ -167,8 +172,7 @@ proc vfs::stg::open {token path mode permissions} {
 }
 
 proc vfs::stg::removedirectory {token path recursive} {
-    ::vfs::log "removedirectory: $token $path $recursive"
-    variable $token
+    ::vfs::log "removedirectory: $token \"$path\" $recursive"
     upvar #0 $token state
     set stg [PathToStg $token [file dirname $path]]
     $stg remove [file tail $path]
@@ -179,37 +183,24 @@ proc vfs::stg::removedirectory {token path recursive} {
 }
 
 proc ::vfs::stg::deletefile {token path} {
-    ::vfs::log "deletefile: $token $path"
+    ::vfs::log "deletefile: $token \"$path\""
     set stg [PathToStg $token [file dirname $path]]
     $stg remove [file tail $path]
 }
 
 proc ::vfs::stg::fileattributes {token path args} {
-    #::vfs::log "fileattributes: $token $path $args"
-    # for normal files, this is the following:
-    #  -archive 1 -hidden 0 -longname ztest.stg -readonly 0
-    #  -shortname ztest.stg -system 0
+    ::vfs::log "fileattributes: $token \"$path\" $args"
     # We don't have any yet.
+    # We could show the guid and state fields from STATSTG possibly.
     switch -- [llength $args] {
-	0 {
-	    # list strings
-	    return [list]
-	}
-	1 {
-	    # get value
-	    # set index [lindex $args 0]
-	    return ""
-	}
-	2 {
-	    # set value
-            # foreach {index value} $args break
-	    vfs::filesystem posixerror $::vfs::posix(EROFS)
-	}
+	0 { return [list] }
+	1 { return "" }
+	2 { vfs::filesystem posixerror $::vfs::posix(EROFS) }
     }
 }
 
 proc ::vfs::stg::utime {token path atime mtime} {
-    #::vfs::log "utime: $path $atime $mtime"
+    ::vfs::log "utime: $token \"$path\" $atime $mtime"
     set stg [PathToStg $token [file dirname $path]]
     #$stg touch [file tail $path] $atime $mtime
     # FIX ME: we don't have a touch op yet.

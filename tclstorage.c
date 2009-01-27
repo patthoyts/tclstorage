@@ -44,7 +44,7 @@
 #define PACKAGE_NAME       "Storage"
 #endif
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION    "1.1.0"
+#define PACKAGE_VERSION    "1.2.0"
 #endif
 
 #include "tclstorage.h"
@@ -1119,6 +1119,11 @@ StorageChannelWatch(ClientData instanceData, int mask)
  * Side effects:
  *	An extra reference to the stream is returned to the called.
  *
+ * NOTE: If anyone really intends to use this it might be better to
+ * 	add the interface pointer to the global interface table and
+ *	return the cookie to the caller. This would ensure correct
+ *	interface marshalling.
+ *
  * ----------------------------------------------------------------------
  */
 
@@ -1262,14 +1267,20 @@ Win32Error(const char * szPrefix, HRESULT hr)
     
     /* deal with a few known values */
     switch (hr) {
-	case STG_E_FILENOTFOUND: 
-	    return Tcl_NewStringObj(": file not found", -1);
-	case STG_E_ACCESSDENIED: 
-	    return Tcl_NewStringObj(": permission denied", -1);
+	case STG_E_FILENOTFOUND: {
+	    msgObj = Tcl_NewStringObj(szPrefix, -1);
+	    Tcl_AppendToObj(msgObj, ": file not found", -1);
+	    return msgObj;
+	}
+	case STG_E_ACCESSDENIED: {
+	    msgObj = Tcl_NewStringObj(szPrefix, -1);
+	    Tcl_AppendToObj(msgObj, ": permission denied", -1);
+	    return msgObj;
+	}
     }
 
     dwLen = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER 
-        | FORMAT_MESSAGE_FROM_SYSTEM,
+        | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL, (DWORD)hr, LANG_NEUTRAL,
         (LPTSTR)&lpBuffer, 0, NULL);
     if (dwLen < 1) {
