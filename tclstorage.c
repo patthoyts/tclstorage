@@ -44,7 +44,7 @@
 #define PACKAGE_NAME       "Storage"
 #endif
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION    "1.2.0"
+#define PACKAGE_VERSION    "1.3.0"
 #endif
 
 #include "tclstorage.h"
@@ -260,7 +260,7 @@ Storage_SafeInit(Tcl_Interp *interp)
  *	Clean up the allocated memory associated with the storage command.
  *
  * Results:
- *	A standard Tcl result
+ *	None.
  *
  * Side effects:
  *	Memory free'd

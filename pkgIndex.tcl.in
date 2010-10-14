@@ -1,0 +1,7 @@
+# Hand-crafted pkgIndex.tcl
+if {![package vsatisfies [package provide Tcl] 8]} {return}
+if {[string compare $::tcl_platform(platform) windows]} {return}
+package ifneeded Storage @PACKAGE_VERSION@ \
+    [list load [file join $dir @PKG_LIB_FILE@] Storage]
+package ifneeded vfs::stg @PACKAGE_VERSION@ [list source [file join $dir stgvfs.tcl]]
+package ifneeded stgvfs   @PACKAGE_VERSION@ [list source [file join $dir stgvfs.tcl]]
