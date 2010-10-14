@@ -536,6 +536,129 @@ test storage-3.9 {open sub-storage for reading - fail write} \
     } \
     -result {1 {error opening "test": permission denied}}
 
+proc onRead {chan size cmd} {
+    set data [read $chan $size]
+    if {[set eof [eof $chan]]} {
+        fileevent $chan readable {}
+        set ::waiting eof
+    }
+    uplevel #0 [linsert $cmd end $eof $data]
+}
+
+test storage-4.0 {fileevent single readable} -setup {
+    set stg [storage open stg40.stg w+]
+    set stm [$stg open test.stm w+]
+    puts -nonewline $stm [string repeat a 655]
+    close $stm
+    set ::size 0
+    proc stg40 {eof data} {incr ::size [string length $data]}
+} -body {
+    set stm [$stg open test.stm r]
+    set len [string length [read $stm]]
+    seek $stm 0
+    fileevent $stm readable [list onRead $stm 1024 ::stg40]
+    set aid [after 1000 {set ::waiting timeout}]
+    vwait ::waiting
+    after cancel $aid
+    close $stm
+    list $len $::waiting $::size
+} -cleanup {
+    $stg close
+    file delete -force stg40.stg
+    unset ::size ::waiting
+    rename stg40 {}
+} -result {655 eof 655}
+
+test storage-4.1 {fileevent multiple readable} -setup {
+    set stg [storage open stg41.stg w+]
+    set stm [$stg open test.stm w+]
+    puts -nonewline $stm [string repeat \0\1\2\3\4 10240]
+    close $stm
+    set ::size 0
+    proc stg41 {eof data} {incr ::size [string length $data]}
+} -body {
+    set stm [$stg open test.stm r]
+    set len [string length [read $stm]]
+    seek $stm 0
+    fileevent $stm readable [list onRead $stm 1024 ::stg41]
+    set aid [after 1000 {set ::waiting timeout}]
+    vwait ::waiting
+    after cancel $aid
+    close $stm
+    list $len $::waiting $::size
+} -cleanup {
+    $stg close
+    file delete -force stg41.stg
+    unset ::size ::waiting
+    rename stg41 {}
+} -result {51200 eof 51200}
+
+test storage-5.0 {fcopy async single} -setup {
+    set stg [storage open stg50.stg w+]
+    set stm [$stg open test.stm w+]
+    puts -nonewline $stm [string repeat \0\1\2\3\4 10240]
+    close $stm
+    set outfile [makeFile {} test50.check]
+    set ::size 0
+    proc stg50 {count {err ok}} {set ::waiting $err}
+} -body {
+    set stm [$stg open test.stm r]
+    fconfigure $stm -translation binary -encoding binary -eofchar {}
+    set out [open $outfile w]
+    fconfigure $out -translation binary -encoding binary -eofchar {}
+    set len [string length [read $stm]]
+    seek $stm 0
+    set aid [after 1000 {set ::waiting timeout}]
+    fcopy $stm $out -command stg50
+    vwait ::waiting
+    after cancel $aid
+    close $stm
+    close $out
+    list $len $::waiting [file size $outfile]
+} -cleanup {
+    $stg close
+    file delete -force stg50.stg
+    unset ::size ::waiting
+    rename stg50 {}
+    removeFile $outfile
+} -result {51200 ok 51200}
+
+test storage-5.1 {fcopy async multiple} -setup {
+    set stg [storage open stg51.stg w+]
+    set stm [$stg open test.stm w+]
+    puts -nonewline $stm [string repeat \0\1\2\3\4 10240]
+    close $stm
+    set outfile [makeFile {} test51.check]
+    set ::size 0
+    proc stg51 {stm out count {err ok}} {
+        if {$err ne "ok" || [eof $stm]} {
+            set ::waiting $err
+        } else {
+            fcopy $stm $out -size 1024 -command [list stg51 $stm $out]
+        }
+    }
+} -body {
+    set stm [$stg open test.stm r]
+    fconfigure $stm -translation binary -encoding binary -eofchar {}
+    set out [open $outfile w]
+    fconfigure $out -translation binary -encoding binary -eofchar {}
+    set len [string length [read $stm]]
+    seek $stm 0
+    set aid [after 1000 {set ::waiting timeout}]
+    fcopy $stm $out -size 1024 -command [list stg51 $stm $out]
+    vwait ::waiting
+    after cancel $aid
+    close $stm
+    close $out
+    list $len $::waiting [file size $outfile]
+} -cleanup {
+    $stg close
+    file delete -force stg51.stg
+    unset ::size ::waiting
+    rename stg51 {}
+    removeFile $outfile
+} -result {51200 ok 51200}
+
 # -------------------------------------------------------------------------
 
 ::tcltest::cleanupTests
