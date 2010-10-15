@@ -171,8 +171,7 @@ STUBPREFIX      = $(PROJECT)stub
 
 DLLOBJS = \
 	$(TMP_DIR)\tclstorage.obj \
-	$(TMP_DIR)\propertyset.obj
-RCRES = \
+	$(TMP_DIR)\propertyset.obj \
 	$(TMP_DIR)\tclstorage.res
 
 HTMLDOCS = \
